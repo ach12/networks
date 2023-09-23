@@ -2,3 +2,7 @@ butler_shell.c
 a.out
 test
 test.dSYM/
+bkg
+bkg.dSYM/Contents/Info.plist
+amp
+amp.dSYM/Contents/Info.plist

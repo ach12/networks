@@ -6,6 +6,7 @@ https://stackoverflow.com/questions/7656549/understanding-requirements-for-execv
 #include <string.h> // only specifies we must use system calls for file access 
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/errno.h>
 #include <unistd.h>
 #include <signal.h> // kills process
 
@@ -14,12 +15,13 @@ https://stackoverflow.com/questions/7656549/understanding-requirements-for-execv
 char *token_maker(char *s); // parses line based on whitespaces
 
 int main(void){
-  int pid;
-  int bkgFlag = 0; // bkgFlag set to 1 when command prefixed with '&'
+
+  int bkgFlag; // bkgFlag set to 1 when command prefixed with '&'
   char line[MAXCHAR];
   char* cmd;
 
   while(1){
+    bkgFlag = 0; // reset bkgFlag for each new command
     printf("@ "); 
     fgets(line, MAXCHAR, stdin);
     cmd = line;
@@ -62,43 +64,64 @@ int main(void){
     }
 
     else{
-      pid = fork();
-      if (pid == 0){ // if child process
-        int error;
-        const char *bin = "/bin/";
-        const char *usrbin = "/usr/bin/";
-        char path[MAXCHAR];
+      int child = fork();
+      if (child == 0){ // if child process
+          int status;
+          int error;
+          const char *bin = "/bin/";
+          const char *usrbin = "/usr/bin/";
+          char path[MAXCHAR];
 
-        strcpy(path, bin);
-        strcat(path, tokenArr[0]);
-        // printf("path %s\n", path);
-
-
-        if((error = execve(path, tokenArr, 0)) == -1){ // try bin path
-
-          strcpy(path, usrbin);
+          strcpy(path, bin);
           strcat(path, tokenArr[0]);
-          printf("path %s\n", path);
 
-          if((error = execve(path, tokenArr, 0)) == -1){ // try usrbin path
-            if((error = execve(cmd, tokenArr, 0)) == -1){
-              printf("command not found\n");
-              return 0;
+        if(bkgFlag == 0){ // replace child process with cmd program
+      // --------------------------------
+          if((error = execve(path, tokenArr, 0)) == -1){ // try bin path
+
+            strcpy(path, usrbin);
+            strcat(path, tokenArr[0]);
+            // printf("path %s\n", path);
+
+            if((error = execve(path, tokenArr, 0)) == -1){ // try usrbin path
+              if((error = execve(cmd, tokenArr, 0)) == -1){
+                printf("error % d, command cannot be executed\n", errno); // execve() fill 
+              }
+            }
+          }
+
+        }
+        else{   // grandchild runs cmd program, child prints bkg termination message
+          int grandchild = fork();
+          if (grandchild == 0){ // if grandchild process
+            if((error = execve(path, tokenArr, 0)) == -1){ // try bin path
+              strcpy(path, usrbin);
+              strcat(path, tokenArr[0]);
+             // printf("path %s\n", path);
+              if((error = execve(path, tokenArr, 0)) == -1){ // try usrbin path
+                if((error = execve(cmd, tokenArr, 0)) == -1){
+                 printf("error % d, command cannot be executed\n", errno); // execve() fill 
+                }
+              }
+            }
+          }
+          else { // if child process AND we did a bkg command
+            waitpid(grandchild, &status, 0);
+            char* argv[] = {"bkg", NULL};
+            if((error = execve("./bkg", argv, 0)) == -1){
+              printf("error % d, bkg cmd termination message cannot be found\n", errno); // execve() fill 
             }
           }
         }
-
-      //   else{
-      //    if(bkgFlag == 1){
-      //     printf("background cmd\n");
-      //   }
-      // }
+      // --------------------------------
       }
 
       else { // if parent process
-        if(bkgFlag == 1){}
-        else{
-          wait(0);
+        int status;
+        if(bkgFlag == 0){ // no ampersand cmd
+            waitpid(child, &status, 0); // wait for ampersand command to finish
+        }
+        else{ // ampersand cmd
         }
       }
     }
