@@ -46,9 +46,11 @@ int count_lines(char* filename)
     {
         for(i = 0 ; i < character ; i++)
         {
-            if(buf[i] == '\n') lines++;
+            printf("__%c\n", buf[i]);
+            if(buf[i] == '\n' || buf[i] == '\0') lines++;
         }
     }
+    lines++;
 
     close(fd);
     
@@ -56,14 +58,13 @@ int count_lines(char* filename)
     return lines;
 }
 
-
 void print_lines(char* filename, int hsize, int vsize)
 {
     int fd3;
     int character2;
     
     int stringsIndexFile = 0;
-
+    int done = 0;
     int linesFile = 0;
     static char bufFile[32768];
     char tempLineFile[500];
@@ -78,14 +79,14 @@ void print_lines(char* filename, int hsize, int vsize)
         return;
     }
 
-    while(0 < (character2 = read(fd3, &bufFile, sizeof(bufFile))))
+    while(0 < (character2 = read(fd3, &bufFile, sizeof(bufFile))) && done != 1)
     {
          int lineIndexFile = 0;
             for(int i = 0 ; i < character2 ; i++)
             {
                 tempLineFile[lineIndexFile] = bufFile[i];   //using tempFile to be able to allocate right size in array of lines later
                 lineIndexFile++; // to be able to keep track of the index of the line and not just the giant buffer
-                if(bufFile[i] == '\n') {     //end of line
+                if(bufFile[i] == '\n' || bufFile[i] == '\0') {     //end of line
                   char lineFile[lineIndexFile+1];
                   // memset(lineFile, 0, sizeof(lineFile));
 
@@ -94,7 +95,7 @@ void print_lines(char* filename, int hsize, int vsize)
                   }
                   lineFile[lineIndexFile+1] = '\0';      //terminating the line
 
-                  // printf("its a real line: %s\n", line);
+                  printf("its a real line: %s\n", lineFile);
 
                   int len = strlen(lineFile);
                   // printf("length : %i\n",len);
@@ -114,32 +115,39 @@ void print_lines(char* filename, int hsize, int vsize)
             char c;
             int readAll = 0;
             int pageNum = 1;
-            while((c=getchar())=='\n'&& persistHeight < linesFile){    // wait for Enter key and safewatch for segmentation
+            printf("%s", "Here\n");
+            while((c=getchar())=='\n' && persistHeight < linesFile && done == 0){    // wait for Enter key and safewatch for segmentation
+                            printf("persistHeight %i vs hsize %i  vsize %i vs linesFile  %i\n", persistHeight, hsize, vsize, linesFile); 
+
               if (vsize > linesFile) vsize = linesFile;   //safewatch for segmentation
-              for (int height = 0; height < vsize; height++){
-                    printf("%.*s\n", hsize, allLinesFile[height]); 
-                    persistHeight ++;
-                  }
+              for (int height = 0; height <= vsize; height++){
+                if (vsize > linesFile-height) vsize = linesFile-height;
+                printf("%.*s\n", hsize, allLinesFile[height]); 
+                persistHeight ++;
+              }
+              printf("persistHeight %i vs hsize %i vs vsize %i vs linesFile  %i\n", persistHeight, hsize, vsize, linesFile); 
               printf("________________________end of page %i\n", pageNum);  //pretty
               pageNum++;   
             }
 
             
-            printf("File is done reading\n");
-            
+            printf("%s","File is done reading\n");
+            done = 1;
+            break;
     }
 
-    close(fd3);
-    
-    
+    int closedPropely = close(fd3);
+    printf("%i\n", closedPropely);
+    return;
   // printf("%8d %s\n", linesFile, filename);
                                        
 }
 
-int main(int argc, char* argv[])
-{
+int* getSHUtils(){
     char* vsizeParam = "VSIZE";
     char* hsizeParam = "HSIZE";
+    static int  params[2]; 
+
     int vsize;
     int hsize;
     char* paramFileName = "shutil.txt";
@@ -149,181 +157,204 @@ int main(int argc, char* argv[])
     int lines = 0;
     char* line;
     int closed;
-    if(argc < 2)
+    static int empty[2];
+        empty[0] = -1;
+        empty[1] = -1;
+    //////////////dealing with config file. had a hard time passing an array of strings so i decided to do it here
+    vsize = 0;
+    hsize = 0;
+    lines = count_lines(paramFileName);
+    int fd2;
+    int characters;
+    // int i;
+    int stringsIndex = 0;
+    static char buf[32768];
+    char tempLine[500];
+    char allLines[lines][500];
+
+    fd2 = open(paramFileName, O_RDWR|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR);
+
+    if(0 > fd2)
     {
-        return 1;
+        perror(paramFileName);
+        return empty;
     }
 
-    for(; i < argc ; i++)
+    while(0 < (characters = read(fd2, &buf, sizeof(buf))))
     {
-        //////////////dealing with config file. had a hard time passing an array of strings so i decided to do it here
-        vsize = 0;
-        hsize = 0;
-        lines = count_lines(paramFileName);
-        int fd2;
-        int characters;
-        // int i;
-        int stringsIndex = 0;
-        static char buf[32768];
-        char tempLine[500];
-        char allLines[lines][500];
-
-        fd2 = open(paramFileName, O_RDWR|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR);
-
-        if(0 > fd2)
+        int lineIndex = 0;
+        for(int i = 0 ; i < characters ; i++)
         {
-            perror(paramFileName);
+            tempLine[lineIndex] = buf[i];
+            lineIndex++;
+            if(buf[i] == '\n') {
+              char line[lineIndex+1];
+              memset(line, 0, sizeof(line));
+
+              for (int j = 0; j < lineIndex; j++){
+                line[j] = tempLine[j];
+              }
+              line[lineIndex+1] = '\0';
+
+              // printf("its a real line: %s\n", line);
+
+              int len = strlen(line);
+              // printf("length : %i\n",len);
+              // printf("its a line: %s\n", line);
+              strcpy(allLines[stringsIndex],line);
+              memset(line, 0, sizeof(line));
+              lineIndex = 0;
+              stringsIndex++;
+
+            }
+
+
+        }
+        // printf("%s\n", line);
+        
+    }
+    // for (int k = 0 ; k<lines; k++){
+    //   if (allLines[k] != NULL)
+    //   printf("%i, %s\n", k, allLines[k]);
+    // }
+    // printf("lines : %i\n", lines);
+
+    for (int k = 0 ; k<lines; k++){
+      if (allLines[k] != NULL){
+        
+        // printf("%i, %s\n", k, allLines[k]);
+        line = allLines[k];
+
+        int wtspace=0;
+        for(char* tmp = line; *tmp != '\n'; tmp++){
+          if(*tmp == ' '){
+            wtspace++;
+          }
+        }
+        // printf("wtspace=%d\n", wtspace);
+        int arrLength = wtspace+2;
+        char *tokenArr[arrLength]; // need extra element for NULL, if there is 1 whitespace there is 2 tokens
+        tokenArr[arrLength-1] = NULL;
+        char *token;
+        int i = 0;  
+        while(i < arrLength-1){
+          // printf("i=%d\n", i);
+          if(i==0){
+            token = token_maker(line);
+            for(char* tmp = token; *tmp != '\0'; tmp++){
+              }
+          }
+          else{
+          token = token_maker(0);
+          if(token == 0){break;} // no more tokens to parse, after breaking i = num of toks 
+          }
+          //puts(token);
+          tokenArr[i] = token;
+          i++;
         }
 
-        while(0 < (characters = read(fd2, &buf, sizeof(buf))))
-        {
-            int lineIndex = 0;
-            for(int i = 0 ; i < characters ; i++)
-            {
-                tempLine[lineIndex] = buf[i];
-                lineIndex++;
-                if(buf[i] == '\n') {
-                  char line[lineIndex+1];
-                  memset(line, 0, sizeof(line));
+        // printf("%s ", tokenArr[0]);
+        // printf("%s\n", tokenArr[1]);
 
-                  for (int j = 0; j < lineIndex; j++){
-                    line[j] = tempLine[j];
-                  }
-                  line[lineIndex+1] = '\0';
-
-                  // printf("its a real line: %s\n", line);
-
-                  int len = strlen(line);
-                  // printf("length : %i\n",len);
-                  // printf("its a line: %s\n", line);
-                  strcpy(allLines[stringsIndex],line);
-                  memset(line, 0, sizeof(line));
-                  lineIndex = 0;
-                  stringsIndex++;
-
-                }
-
-
-            }
-            // printf("%s\n", line);
-            
-        }
-        // for (int k = 0 ; k<lines; k++){
-        //   if (allLines[k] != NULL)
-        //   printf("%i, %s\n", k, allLines[k]);
-        // }
-        // printf("lines : %i\n", lines);
-
-        for (int k = 0 ; k<lines; k++){
-          if (allLines[k] != NULL){
-            
-            // printf("%i, %s\n", k, allLines[k]);
-            line = allLines[k];
-
-            int wtspace=0;
-            for(char* tmp = line; *tmp != '\n'; tmp++){
-              if(*tmp == ' '){
-                wtspace++;
-              }
-            }
-            // printf("wtspace=%d\n", wtspace);
-            int arrLength = wtspace+2;
-            char *tokenArr[arrLength]; // need extra element for NULL, if there is 1 whitespace there is 2 tokens
-            tokenArr[arrLength-1] = NULL;
-            char *token;
-            int i = 0;  
-            while(i < arrLength-1){
-              // printf("i=%d\n", i);
-              if(i==0){
-                token = token_maker(line);
-                for(char* tmp = token; *tmp != '\0'; tmp++){
-                  }
-              }
-              else{
-              token = token_maker(0);
-              if(token == 0){break;} // no more tokens to parse, after breaking i = num of toks 
-              }
-              //puts(token);
-              tokenArr[i] = token;
-              i++;
-            }
-
-            // printf("%s ", tokenArr[0]);
+        if (tokenArr[1] != NULL){ 
+          printf("__%s__\n",tokenArr[1]); printf("__%i__\n",strcmp(tokenArr[1], ""));
+          if( strcmp(tokenArr[1], " ") == 0 || strcmp(tokenArr[1], "\n") == 0 || strcmp(tokenArr[1], "  ") == 0 || strcmp(tokenArr[1], "") == 0) {
+            break;
+          } 
+          else{
+            int testIfNumber =atoi(tokenArr[1]);
+            printf("testIf: %i\n",testIfNumber);
             // printf("%s\n", tokenArr[1]);
+            int resultV = strcmp(tokenArr[0], vsizeParam);
+            // printf("resutlV :%i\n", resultV);
 
-            if (tokenArr[1] != NULL) {
-              // printf("%s\n", tokenArr[1]);
-              int resultV = strcmp(tokenArr[0], vsizeParam);
-              // printf("resutlV :%i\n", resultV);
-
-              if (resultV == 0) {
-                vsizeFound = 1;
-                int vsizeIn = atoi(tokenArr[1]);
-                vsize = vsizeIn;
-              }
-              int resultH = strcmp(tokenArr[0], hsizeParam);
-              // printf("resutlH :%i\n", resultH);
-              if (resultH == 0) {
-                hsizeFound = 1;
-                int hsizeIn = atoi(tokenArr[1]);
-                hsize = hsizeIn;
-              }
+            if (resultV == 0) {
+              vsizeFound = 1;
+              int vsizeIn = atoi(tokenArr[1]);
+              vsize = vsizeIn;
+            }
+            int resultH = strcmp(tokenArr[0], hsizeParam);
+            // printf("resutlH :%i\n", resultH);
+            if (resultH == 0) {
+              hsizeFound = 1;
+              int hsizeIn = atoi(tokenArr[1]);
+              hsize = hsizeIn;
             }
           }
         }
-        // printf("vsizeFound :%i\n", vsizeFound);
-        // printf("hsizeFound :%i\n", hsizeFound);
-
-        if (vsizeFound == 1 && hsizeFound == 1)  {
-            closed = close(fd2);
-            // printf("%s", "found both\n");  
-        }
-        if (vsizeFound == 1 && hsizeFound != 1)  { 
-          char* hNew = "HSIZE 75\n";
-          write(fd2, hNew, strlen(hNew));
-          hsize = 75;
-          char* end = "\0";
-          write(fd2, end, strlen(end));
-          closed = close(fd2);
-
-          // printf("%s", "only found vsize, adding HSIZE 75\n");
-
-        }
-        if (vsizeFound != 1 && hsizeFound == 1)  {
-          // 
-          char* vNew = "VSIZE 40\n";
-          write(fd2, vNew, strlen(vNew));
-          vsize = 40;
-          char* end = "\0";
-          write(fd2, end, strlen(end));
-          closed = close(fd2);
-
-          // printf("%s", "only found hsize, adding VSIZE 40\n");
-        }
-        if (vsizeFound != 1 && hsizeFound != 1){
-          // 
-          vsize = 40;
-          hsize = 75;
-          char* vNew = "VSIZE 40\n";
-          write(fd2, vNew, strlen(vNew));
-          char* hNew = "HSIZE 75\n";
-          write(fd2, hNew, strlen(hNew));
-          char* end = "\0";
-          write(fd2, end, strlen(end));
-          closed = close(fd2);
-          // printf("%s", "no params found\n");
-        }
-
-        printf("VSIZE: %d\n", vsize);
-        printf("HSIZE: %d\n", hsize);
-        printf("%i\n", closed);
-
-        ///////////// now lets print the other file
-        print_lines(argv[i],hsize, vsize);
-
-
       }
+    // printf("vsizeFound :%i\n", vsizeFound);
+    // printf("hsizeFound :%i\n", hsizeFound);
+
+    if (vsizeFound == 1 && hsizeFound == 1)  {
+        closed = close(fd2);
+        // printf("%s", "found both\n");  
+    }
+    if (vsizeFound == 1 && hsizeFound != 1)  { 
+      char* hNew = "HSIZE 75\n";
+      write(fd2, hNew, strlen(hNew));
+      hsize = 75;
+      char* end = "\0";
+      write(fd2, end, strlen(end));
+      closed = close(fd2);
+
+      // printf("%s", "only found vsize, adding HSIZE 75\n");
+
+    }
+    if (vsizeFound != 1 && hsizeFound == 1)  {
+      // 
+      char* vNew = "VSIZE 40\n";
+      write(fd2, vNew, strlen(vNew));
+      vsize = 40;
+      char* end = "\0";
+      write(fd2, end, strlen(end));
+      closed = close(fd2);
+
+      // printf("%s", "only found hsize, adding VSIZE 40\n");
+    }
+    if (vsizeFound != 1 && hsizeFound != 1){
+      // 
+      vsize = 40;
+      hsize = 75;
+      char* vNew = "VSIZE 40\n";
+      write(fd2, vNew, strlen(vNew));
+      char* hNew = "HSIZE 75\n";
+      write(fd2, hNew, strlen(hNew));
+      char* end = "\0";
+      write(fd2, end, strlen(end));
+      closed = close(fd2);
+      // printf("%s", "no params found\n");
+    }
+    params[0] = hsize;
+    params[1] = vsize;
+    printf("VSIZE: %d\n", vsize);
+    printf("HSIZE: %d\n", hsize);
+    printf("%i\n", closed);
   }
+      return params;
+
+}    
+int main(int argc, char* argv[]){ // int* returnVnHSize()  
+
+  int* shUtils = getSHUtils();
+  int hSize = shUtils[0];
+  int vSize = shUtils[1];
+  
+  if(argc < 2)
+{
+
+  return 1;
+}
+
+
+  ///////////// now lets print the other file
+  print_lines(argv[1], hSize, vSize); //argv[i] is the file to be read
+    printf(" %s\n", "here");
+
+  return 0;
+
+}
+  
     
 
 
