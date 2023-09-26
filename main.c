@@ -1,21 +1,36 @@
 /*
 https://stackoverflow.com/questions/7656549/understanding-requirements-for-execve-and-setting-environment-vars
+token_maker based on strtok function, but altered since we know already that our delimiter will be a white space, and strings will include '\n' : https://www.youtube.com/watch?v=Eu4pXgvQnK8
+
+Questions
+
+2) assumes that the user puts one space between tokens. so ' cmd' or 'cmd   arg' are not acceptable (should have printout statment for this)
 
 */
 #include <stdio.h>
+#include <stdlib.h>  // for atoi
 #include <string.h> // only specifies we must use system calls for file access 
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/errno.h>
 #include <unistd.h>
 #include <signal.h> // kills process
+#include <fcntl.h> // flags for open()
+#include <sys/stat.h>
 
 #define MAXCHAR 256 // can have at most 255 characters as your input line
 
 char *token_maker(char *s); // parses line based on whitespaces
+int getSizeParam(char* line);
+int startup(void); // read shconfig, searching for VSIZE and HSIZE values
+
+int vsize = -1;
+int hsize = -1; 
 
 int main(void){
 
+  startup();
+  printf("VSIZE set to %d\nHSIZE set to %d\n", vsize, hsize);
   int bkgFlag; // bkgFlag set to 1 when command prefixed with '&'
   char line[MAXCHAR];
   char* cmd;
@@ -30,8 +45,8 @@ int main(void){
       cmd = line + 2;
     }
 
-    int wtspace=0;
-    for(char* tmp = cmd; *tmp != '\n'; tmp++){
+    int wtspace=0; // count number of white spaces
+    for(char* tmp = cmd; *tmp != '\n'; tmp++){ 
       if(*tmp == ' '){
         wtspace++;
       }
@@ -82,8 +97,12 @@ int main(void){
             strcpy(path, usrbin);
             strcat(path, tokenArr[0]);
             // printf("path %s\n", path);
-
-            if((error = execve(path, tokenArr, 0)) == -1){ // try usrbin path
+            if(strcmp(tokenArr[0], "more") == 0){ // if more cmd
+              if((error = execve("./mymore", tokenArr, 0)) == -1){ // more cmd is in current directory
+                printf("error % d, internal more command cannot be executed\n", errno);
+              }
+            }
+            else if((error = execve(path, tokenArr, 0)) == -1){ // try usrbin path
               if((error = execve(cmd, tokenArr, 0)) == -1){
                 printf("error % d, command cannot be executed\n", errno); // execve() fill 
               }
@@ -94,7 +113,12 @@ int main(void){
         else{   // grandchild runs cmd program, child prints bkg termination message
           int grandchild = fork();
           if (grandchild == 0){ // if grandchild process
-            if((error = execve(path, tokenArr, 0)) == -1){ // try bin path
+            if(strcmp(tokenArr[0], "more") == 0){ // if more cmd
+              if((error = execve("./more", tokenArr, 0)) == -1){ // more cmd is in current directory
+                printf("error % d, internal more command cannot be executed\n", errno);
+              }
+            }
+            else if((error = execve(path, tokenArr, 0)) == -1){ // try bin path
               strcpy(path, usrbin);
               strcat(path, tokenArr[0]);
              // printf("path %s\n", path);
@@ -146,4 +170,95 @@ char *token_maker(char *s){ // first time token_maker called, s is the raw input
 	}
 	return s;
 }
+
+
+int getSizeParam(char* bufChunk){
+  bufChunk = bufChunk+5;
+  while(*bufChunk == ' '){ // there is at least one blank between var name and value
+    bufChunk++;
+  }
+  int size = atoi(bufChunk);
+  return size;
+}
+
+
+int startup(void){ // can only use systems call
+
+  int fd;
+  int character;
+ 
+  char buffer[MAXCHAR]; // can hold a max of 256 characters
+  memset(buffer, '\0', MAXCHAR); 
+
+  fd = open("./shconfig", O_RDWR|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR);
+
+  if(fd < 0) { // open() returns -1 on failure
+    printf("error % d, open sys call\n", errno); 
+    return -1;
+  }
+  //https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
+  struct stat st;
+  stat("./shconfig", &st);
+  int fileSize = st.st_size;
+  printf("size of file: %d\n", fileSize);
+  character = read(fd, &buffer, sizeof(buffer)-1);  // read max of 255 characters from the file, 256th character is always '\0
+  if (character < 0){
+    printf("error % d, read sys call\n", errno);
+    return -1; 
+  }
+  printf("bytes read: % d\n", character);
+  char* bufChunk = buffer;
+  char* tmp = buffer;
+  if(character <= fileSize){
+    while(vsize == -1 || hsize ==-1){ // while loop breaks if *tmp points to 0. This will always happen since buffer will always have 0 at the end. Loop ends early is sizes are found
+      if(*tmp == '\n' || *tmp == '\0'){
+        if (strncmp(bufChunk, "VSIZE", 5) == 0){
+          vsize = getSizeParam(bufChunk);
+          printf("atoi vsize=%d\n", vsize);
+        }
+        else if (strncmp(bufChunk, "HSIZE", 5) == 0){
+          hsize = getSizeParam(bufChunk);
+          printf("atoi hsize=%d\n", hsize);
+        }
+        if(*tmp == '\0'){ 
+          break;
+        } // dont want tmp to point to unknown mem
+        tmp++;
+        bufChunk = tmp;
+      }
+      else{
+      tmp++;
+      }
+    }
+  }
+  if(character > fileSize){
+    // while (character > fileSize){
+    //   int i = 0;
+    //     for(i=0; buffer[i] != '\n'; i++){}
+    //       character = pread(fd, &buffer, sizeof(buffer)-1, 0);  // read max of 255 characters from the file, 256th character is always '\0
+    printf("oh no, can't handle when shconfig size bigger than buffer\n");
+    } 
+  int error;
+  const int sizeBuf = 9;
+  if (vsize == -1){ // vsize NOT set
+    if((error = write(fd, "\nVSIZE 40", sizeBuf)) == -1){
+      printf("error % d, VSIZE not appended to shconfig\n", errno);
+      return -1;
+    }
+    vsize = 40;
+  }
+  if (hsize == -1){ // hsize NOT set
+    if((error = write(fd, "\nHSIZE 75", sizeBuf)) == -1){
+      printf("error % d, HSIZE not appended to shconfig\n", errno);
+      return -1;
+    }
+    hsize = 75;
+  }
+
+  close(fd);
+  return 0;
+}
+
+
+
 
