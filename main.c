@@ -22,22 +22,26 @@ Questions
 
 char *token_maker(char *s); // parses line based on whitespaces
 int getSizeParam(char* line);
-int startup(void); // read shconfig, searching for VSIZE and HSIZE values
+struct More startup(struct More m); // read shconfig, searching for VSIZE and HSIZE values
 
-int vsize = -1;
-int hsize = -1; 
+struct More{
+int vsize;
+int hsize; 
+};
 
 int main(void){
 
-  startup();
-  printf("VSIZE set to %d\nHSIZE set to %d\n", vsize, hsize);
+struct More m = {-1,-1};
+
+ m = startup(m);
+  printf("VSIZE set to %d\nHSIZE set to %d\n", m.vsize, m.hsize);
   int bkgFlag; // bkgFlag set to 1 when command prefixed with '&'
   char line[MAXCHAR];
   char* cmd;
 
   while(1){
     bkgFlag = 0; // reset bkgFlag for each new command
-    printf("@ "); 
+    printf("\n@ "); 
     fgets(line, MAXCHAR, stdin);
     cmd = line;
     if((line[0] == '&') && (line[1] == ' ')){
@@ -75,7 +79,7 @@ int main(void){
 
     if(strcmp(line, "exit") == 0){
       printf("internal exiting cmd\n");
-      return 0;
+      return 0; // kills shell, but background cmd ran by child continues even after the shell is killed
     }
 
     else{
@@ -98,8 +102,15 @@ int main(void){
             strcat(path, tokenArr[0]);
             // printf("path %s\n", path);
             if(strcmp(tokenArr[0], "more") == 0){ // if more cmd
-              if((error = execve("./mymore", tokenArr, 0)) == -1){ // more cmd is in current directory
+              char vsizeStr[10];
+              char hsizeStr[10];
+              sprintf(vsizeStr, "%d", m.vsize);
+              sprintf(hsizeStr, "%d", m.hsize);
+
+              char *moreTokenArr[] = {tokenArr[0], tokenArr[1], vsizeStr, hsizeStr, NULL};
+              if((error = execve("./mymore", moreTokenArr, 0)) == -1){ // more cmd is in current directory
                 printf("error % d, internal more command cannot be executed\n", errno);
+                perror("perror: ");
               }
             }
             else if((error = execve(path, tokenArr, 0)) == -1){ // try usrbin path
@@ -114,8 +125,9 @@ int main(void){
           int grandchild = fork();
           if (grandchild == 0){ // if grandchild process
             if(strcmp(tokenArr[0], "more") == 0){ // if more cmd
-              if((error = execve("./more", tokenArr, 0)) == -1){ // more cmd is in current directory
+              if((error = execve("./mymore", tokenArr, 0)) == -1){ // more cmd is in current directory
                 printf("error % d, internal more command cannot be executed\n", errno);
+                perror("perror: ");
               }
             }
             else if((error = execve(path, tokenArr, 0)) == -1){ // try bin path
@@ -174,15 +186,12 @@ char *token_maker(char *s){ // first time token_maker called, s is the raw input
 
 int getSizeParam(char* bufChunk){
   bufChunk = bufChunk+5;
-  while(*bufChunk == ' '){ // there is at least one blank between var name and value
-    bufChunk++;
-  }
-  int size = atoi(bufChunk);
+  int size = atoi(bufChunk); // atoi ignores white spaces
   return size;
 }
 
 
-int startup(void){ // can only use systems call
+struct More startup(struct More m){ // can only use systems call
 
   int fd;
   int character;
@@ -194,7 +203,6 @@ int startup(void){ // can only use systems call
 
   if(fd < 0) { // open() returns -1 on failure
     printf("error % d, open sys call\n", errno); 
-    return -1;
   }
   //https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
   struct stat st;
@@ -204,21 +212,20 @@ int startup(void){ // can only use systems call
   character = read(fd, &buffer, sizeof(buffer)-1);  // read max of 255 characters from the file, 256th character is always '\0
   if (character < 0){
     printf("error % d, read sys call\n", errno);
-    return -1; 
   }
   printf("bytes read: % d\n", character);
   char* bufChunk = buffer;
   char* tmp = buffer;
   if(character <= fileSize){
-    while(vsize == -1 || hsize ==-1){ // while loop breaks if *tmp points to 0. This will always happen since buffer will always have 0 at the end. Loop ends early is sizes are found
+    while(m.vsize == -1 || m.hsize ==-1){ // while loop breaks if *tmp points to 0. This will always happen since buffer will always have 0 at the end. Loop ends early is sizes are found
       if(*tmp == '\n' || *tmp == '\0'){
         if (strncmp(bufChunk, "VSIZE", 5) == 0){
-          vsize = getSizeParam(bufChunk);
-          printf("atoi vsize=%d\n", vsize);
+          m.vsize = getSizeParam(bufChunk);
+          printf("atoi m.vsize=%d\n", m.vsize);
         }
         else if (strncmp(bufChunk, "HSIZE", 5) == 0){
-          hsize = getSizeParam(bufChunk);
-          printf("atoi hsize=%d\n", hsize);
+          m.hsize = getSizeParam(bufChunk);
+          printf("atoi m.hsize=%d\n", m.hsize);
         }
         if(*tmp == '\0'){ 
           break;
@@ -240,23 +247,21 @@ int startup(void){ // can only use systems call
     } 
   int error;
   const int sizeBuf = 9;
-  if (vsize == -1){ // vsize NOT set
+  if (m.vsize == -1){ // m.vsize NOT set
     if((error = write(fd, "\nVSIZE 40", sizeBuf)) == -1){
       printf("error % d, VSIZE not appended to shconfig\n", errno);
-      return -1;
     }
-    vsize = 40;
+    m.vsize = 40;
   }
-  if (hsize == -1){ // hsize NOT set
+  if (m.hsize == -1){ // m.hsize NOT set
     if((error = write(fd, "\nHSIZE 75", sizeBuf)) == -1){
       printf("error % d, HSIZE not appended to shconfig\n", errno);
-      return -1;
     }
-    hsize = 75;
+    m.hsize = 75;
   }
 
   close(fd);
-  return 0;
+  return m;
 }
 
 
