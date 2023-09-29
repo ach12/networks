@@ -1,0 +1,43 @@
+Amber Hewett, Steven Poulin
+ahewett19@ubishops.ca, 
+002262147,
+
+----- OVERVIEW OF THE PROGRAM -----
+
+1. sshell.c
+  main():
+  The shell accepts a command from stdin and puts it into char array 'line'. The ampersand command is checked for, setting a flag if there. The command and each of its arguments are put into a null terminated aray, with the ampersand command being ignored.
+
+  If the ampersand flag is not set, a child process attempts to execute the command. If the ampersand flag is set, the child process forks and the new process (known as the grandchild)  attempts the command. The child will wait until the grandchild terminates in order to print a message.
+
+  The child and grandchild processes will also check if the more command is being requested. Attempting to execute the more command results in the creation of a new null terminated array, which copies the old arrays elements, plus the VSIZE and HSIZE params found by the startup function.
+  
+  startup():
+  Executed before the shells first prompt, startup() reads from the shconfig file into a buffer. If the number of bytes in shconfig is greater than the buffer capacity, shconfig is not searched for parameters. If the first 5 characters of a line is equal to VSIZE or HSIZE, the value of the parameter is assigned to a variable which will be passed along to the 'more' executable.
+
+  tokenMaker():
+  tokenMaker() was repurposed from Amber's previous shell assignment in her class on OS and based on strtok() from the standard library. Repeatedly calling strtok() on a string removes and returns the first word from a.
+
+2. mymore2.c
+  main():
+  function opens file given from arguments, under the assumption that it is in the current directory. The file is read one byte at a time, with current count of characters and lines printed being kept. 
+  
+  A lines characters will stop being printed in two cases: if we have reached the max HSIZE as dictated by shconfig, or when there are no more characters to print. If we have reached the max HSIZE, characters continue to be read but are not printed until we reach the end of the line. 
+
+  Once the max lines are printed as dictated by VSIZE, user are given the choice between reseting the line count and continues to read characters, or to end the command.
+
+
+----- DESCRIPTION OF TESTS PERFORMED -----
+
+
+/*
+https://stackoverflow.com/questions/7656549/understanding-requirements-for-execve-and-setting-environment-vars
+token_maker based on strtok function, but altered since we know already that our delimiter will be a white space, and strings will include '\n' : https://www.youtube.com/watch?v=Eu4pXgvQnK8
+
+Questions
+
+2) assumes that the user puts one space between tokens. so ' cmd' or 'cmd   arg' are not acceptable (should have printout statment for this)
+
+*/
+
+  //https://stackoverflow.com/questions/238603/how-can-i-get-a-files-size-in-c
