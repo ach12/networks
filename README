@@ -28,6 +28,30 @@ ahewett19@ubishops.ca,
 
 
 ----- DESCRIPTION OF TESTS PERFORMED -----
+1. Finding commands
+    - execute command in bin path (echo hello)
+    - execute command in usr/bin path (size ./sshell)
+    - execute command via absolute path (/.../amp)
+2. Simultaneous commands
+    - Run amp as background command. Run new commands which may or may not also be background commands. Result: background command termination message will interrupt a new command
+    - Run amp as normal command. Run new commands which may or may not also be normal commands. Result: All new commands wait until amp is done in order to execute
+3. Reading shconfig
+    - shconfig is created is file does not exist
+    - appends VSIZE or HSIZE if not found in file
+    - reads value of VSIZE and HSIZE if found
+    - 
+
+
+----- TESTS NOT PERFORMED -----
+    - behavior when command from stdin is larger than MAXCHAR : segmentation fault
+
+----- LIMITATIONS -----
+1. Parsing prompt command
+    - There must be only 1 white spaces between each arguments entered on the command line (uses number of whitespaces to set tokenArr size)
+2. Reading shconfig
+    - the shconfig file with more characters than MAXCHAR will not be searched for parameters
+    - 
+
 
 
 /*

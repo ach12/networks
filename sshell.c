@@ -7,7 +7,7 @@
 #include <sys/errno.h>
 #include <sys/stat.h>
 
-#define MAXCHAR 256 // command can have at most 256 characters
+#define MAXCHAR 3 // command can have at most 256 characters
 
 char *tokenMaker(char *s); // parses string based on whitespaces, returns one token at a time
 int getSizeParam(char* line); // passed the VSIZE and HSIZE lines in shconfig, returns value
@@ -29,7 +29,7 @@ int main(void){
 
   while(1){
     bkgFlag = 0; // reset bkgFlag for each new command
-    printf("\n@ "); 
+    printf("@ "); 
     fgets(line, MAXCHAR, stdin);
     cmd = line;
     if((line[0] == '&') && (line[1] == ' ')){
@@ -128,8 +128,8 @@ int main(void){
           }
           else { // if child process AND a background command was requested
             waitpid(grandchild, &status, 0);
-            char* argv[] = {"bkgMessage", NULL};
-            if((error = execve("./bkgMessage", argv, 0)) == -1){
+            char* argv[] = {"bkg", NULL};
+            if((error = execve("./bkg", argv, 0)) == -1){
               printf("error % d, background command termination message cannot be executed\n", errno);
             }
           }
@@ -173,7 +173,6 @@ int getSizeParam(char* bufChunk){
   int size = atoi(bufChunk); // atoi ignores white spaces, returns numerical characters
   return size;
 }
-
 struct More startup(struct More m){ // can only use systems call
 
   int fd;
@@ -191,13 +190,13 @@ struct More startup(struct More m){ // can only use systems call
   struct stat st;
   stat("./shconfig", &st);
   int fileSize = st.st_size;
-  printf("fileSize: % d\n", fileSize);
+  //printf("fileSize: % d\n", fileSize);
   character = read(fd, &buffer, sizeof(buffer)-1);  // read max of 255 characters from the file, 256th character is always '\0' for safety reasons
   if (character < 0){
     printf("error % d, read sys call\n", errno);
     perror("perror ");
   }
-  printf("bytes read: % d\n", character);
+  //printf("bytes read: % d\n", character);
   char* bufChunk = buffer;
   char* tmp = buffer;
   if(character <= fileSize){ // read() will not need to be called again
@@ -225,7 +224,18 @@ struct More startup(struct More m){ // can only use systems call
   } 
 
   int error;
-  const int sizeBuf = 9;
+  const int sizeBuf = 9; // "VSIZE 40\n" as 9 characters
+  if(m.vsize == -1 && m.hsize == -1){ // if both NOT set
+    if((error = write(fd, "VSIZE 40\n", sizeBuf)) == -1){
+      printf("error % d, VSIZE not appended to shconfig\n", errno);
+    }
+    m.vsize = 40;
+    if((error = write(fd, "HSIZE 75", sizeBuf-1)) == -1){
+      printf("error % d, HSIZE not appended to shconfig\n", errno);
+    }
+    m.hsize = 75;
+  }
+
   if (m.vsize == -1){ // if vsize is NOT set
     if((error = write(fd, "\nVSIZE 40", sizeBuf)) == -1){
       printf("error % d, VSIZE not appended to shconfig\n", errno);
