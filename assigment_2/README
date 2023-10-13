@@ -1,0 +1,67 @@
+Amber Hewett
+ahewett19@ubishops.ca
+002262147
+
+----- OVERVIEW OF THE PROGRAM -----
+
+1. shell.cc
+  main():
+  Shell does not accept commands longer than MAXCHAR. Shell should accept \n and \r\n line terminations since both end in \n. Local(!) and background(&) commands are checked for, setting a flag if found. Local commands which may or may not be background commands are executed as in assignment 1, but require the ! prefix. Nonlocal commands allocate a new socket unless the keepalive command has been issued and a socket has already been allocated. The shell forks and its childs sends the nonlocal command to the server. If the keepalive command has been issued, the child writes to a pipe shared with shell the socket descriptor, and does not close the socket. A null terminated server response is not assumed.
+  
+  If a background command is requested (local or nonlocal), the child process forks and the new process, known as the grandchild, attempts the command. The child will wait until the grandchild terminates in order to print a message.
+
+  startup():
+  Executed before the shells first prompt, startup() reads from the shconfig file into a buffer. If the number of bytes in shconfig is greater than the buffer capacity, shconfig is not searched for parameters. The first 5 characters of a line are checked to be equal to VSIZE, HSIZE, RPORT, or RHOST. The value of the parameters are assigned assigned to variables in the struct Param, which are used by the local more command or to bind an active socket to the specified server. If RPORT or RHOST is not found in shconfig, or the length of RHOST in shconfig is longer than MAXCHAR, the nonlocal commands cannot be issued.
+  
+
+  tokenMaker():
+  tokenMaker() was repurposed from Amber's previous shell assignment in her class on OS and based on strtok() from the standard library. Repeatedly calling strtok() on a string removes and returns the first word from a.
+
+  more():
+  function opens file given from arguments, under the assumption that it is in the current directory. The file is read one byte at a time, with current count of characters and lines printed being kept. 
+  
+  A lines characters will stop being printed in two cases: if we have reached the max HSIZE as dictated by shconfig, or when there are no more characters to print. If we have reached the max HSIZE, characters continue to be read but are not printed until we reach the end of the line. 
+
+  Once the max lines are printed as dictated by VSIZE, user are given the choice between reseting the line count and continues to read characters, or to end the command.
+
+  2. tcp-utils.cc / tcp-utils.h / client.cc
+  connectbyportint():
+  Written by professor Bruda, used without modification.
+
+  The way in which the client connects to the server and reads the servers response is inspired by professor Bruda's client example in 'client.cc'
+
+
+----- DESCRIPTION OF TESTS PERFORMED SUCCESSFULLY -----
+1. Finding commands
+   - execute command in bin path (! echo hello)
+   - execute command in usr/bin path (! size ./rsshell)
+   - execute command via absolute path (! /.../amp)
+
+2. Simultaneous commands
+   - Run amp as background command. Run new commands which may or may not also be background commands. Result: background command termination message will interrupt a new command
+   - Run amp as foreground command. Run new commands which may or may not also be normal commands. Result: All new commands wait until amp is done in order to execute
+
+3. Reading shconfig
+   - shconfig is created if file does not exist
+   - reads value of VSIZE and HSIZE if found
+   - appends VSIZE or HSIZE if not found in file
+   - reads value of RPORT and RHOST if found 
+   - prints out message if RPORT or RHOST is not found, and nonlocal commands are not allowed
+
+4. nonlocal commands (testing with port 8001 on linux.ubishops.ca)
+   - Send remote foreground command. Result: shell waits for all of server response before returning the prompt
+   - send two successive remote foreground commands. Result: server response for first command completes before server response for second command starts
+   - send two successive remote background commands. Result: sever responses interweave.
+   - send successive remote background commands when keepalive is in effect. Result: server response for first command completes before server response for second command starts
+
+----- DISCUSSION -----
+  When two successive remote background commands are sent, the server responses interweave. This is because the commands are sent using different socket descriptors, so the second command does not need to wait for the first command in order to print to the standard output. 
+
+  When the keepalive command has been issued, the server responses of two successive remote background commands do not interweave. This is because the commands sent are using the same socket descriptors, so the second command must wait for the first command to finish before the second command can use it.
+
+----- LIMITATIONS -----
+1. Parsing prompt command
+    - There must be only 1 white spaces between each arguments entered on the command line (uses number of whitespaces to set tokenArr size)
+    
+2. Reading shconfig
+    - the shconfig file with more characters than MAXCHAR will not be searched for parameters
