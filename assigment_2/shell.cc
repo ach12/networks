@@ -41,7 +41,6 @@ int main(void){
   int constcxnFlag = 0; // constcxnFlag set to 1 when keepalive cmd has been entered
   int cxnDone = 0; // used in scenario of constcxnFlag equal to 1, is set after intial cxn has been made
   int sd; // file descriptor
-  int psd; // will hold file descriptor read from pipe
   char line[MAXCHAR+1];
   char* cmd;
   while(1){
